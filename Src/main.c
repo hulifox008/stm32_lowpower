@@ -60,6 +60,23 @@ static void MX_IWDG_Init(void);
 
 /* USER CODE END 0 */
 
+struct blink_def
+{
+	unsigned char off;
+	unsigned char on;
+};
+
+struct blink_def bpattern[] = {
+		{8, 1},
+		{5, 1},
+		{2, 2},
+		{5, 1},
+		{3, 1},
+		{5, 3},
+		{8, 1},
+		{6, 1},
+};
+
 /**
   * @brief  The application entry point.
   * @retval int
@@ -81,6 +98,7 @@ int main(void)
 
   /* Configure the system clock */
   SystemClock_Config();
+  __HAL_RCC_BKP_CLK_ENABLE();
 
   /* USER CODE BEGIN SysInit */
 
@@ -90,17 +108,60 @@ int main(void)
   MX_GPIO_Init();
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
-
   /* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+  HAL_PWR_EnableBkUpAccess();
 
-    /* USER CODE BEGIN 3 */
+#if 0   /* This is to test the reset reason flags */
+  if(RCC->CSR & RCC_CSR_PORRSTF ) {
+	  __HAL_RCC_CLEAR_RESET_FLAGS();
+	  for(;;) {
+		  HAL_GPIO_WritePin(LED_en_GPIO_Port, LED_en_Pin, GPIO_PIN_RESET);
+		  HAL_Delay(100);
+		  HAL_GPIO_WritePin(LED_en_GPIO_Port, LED_en_Pin, GPIO_PIN_SET);
+		  HAL_Delay(100);
+	  }
+  } else {
+	  __HAL_RCC_CLEAR_RESET_FLAGS();
+	  for(;;) {
+		  HAL_GPIO_WritePin(LED_en_GPIO_Port, LED_en_Pin, GPIO_PIN_RESET);
+		  HAL_Delay(1000);
+		  HAL_GPIO_WritePin(LED_en_GPIO_Port, LED_en_Pin, GPIO_PIN_SET);
+		  HAL_Delay(1000);
+	  }
   }
+
+#endif
+
+  int t;
+
+
+  int total_pattern = sizeof(bpattern)/sizeof(struct blink_def);
+  unsigned char i = BKP->DR1;
+  if(i >= total_pattern) {
+	  i = 0;
+  }
+  BKP->DR1 = (i+1) % total_pattern;
+
+  HAL_GPIO_WritePin(LED_en_GPIO_Port, LED_en_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(SuperLED_en_GPIO_Port, SuperLED_en_Pin, GPIO_PIN_SET);
+  for(t=bpattern[i].on;t>0;t--) {
+	  HAL_Delay(300);
+	  HAL_IWDG_Refresh(&hiwdg);
+  }
+  HAL_GPIO_WritePin(LED_en_GPIO_Port, LED_en_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(SuperLED_en_GPIO_Port, SuperLED_en_Pin, GPIO_PIN_RESET);
+
+
+  //hiwdg.Instance = IWDG;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_256;
+  hiwdg.Init.Reload = bpattern[i].off*157;
+  if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  HAL_PWR_EnterSTANDBYMode();
   /* USER CODE END 3 */
 }
 
@@ -155,7 +216,7 @@ static void MX_IWDG_Init(void)
 
   /* USER CODE END IWDG_Init 1 */
   hiwdg.Instance = IWDG;
-  hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_256;
   hiwdg.Init.Reload = 4095;
   if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
   {
@@ -185,7 +246,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(LED_en_GPIO_Port, LED_en_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(SuperLED_en_GPIO_Port, SuperLED_en_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : LED_en_Pin */
   GPIO_InitStruct.Pin = LED_en_Pin;
@@ -194,12 +255,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_en_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PB11 */
-  GPIO_InitStruct.Pin = GPIO_PIN_11;
+  /*Configure GPIO pin : SuperLED_en_Pin */
+  GPIO_InitStruct.Pin = SuperLED_en_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(SuperLED_en_GPIO_Port, &GPIO_InitStruct);
 
 }
 
